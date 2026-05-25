@@ -1576,12 +1576,12 @@ a { color: inherit; }
     if (!track) return;
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
 
-    const SPEED = 0.6; // px per frame at 60fps (~36px/s)
-    const HALF  = track.children.length / 2; // items in one set
-    let setW    = 0;
-    let x       = 0;
-    let rafId   = null;
-    let paused  = false;
+    const SPEED_PX_S = 44;        // px per second — frame-rate independent
+    const HALF       = track.children.length / 2;
+    let setW         = 0;
+    let x            = 0;
+    let lastTs       = null;
+    let paused       = false;
 
     function measure() {
       setW = 0;
@@ -1590,17 +1590,18 @@ a { color: inherit; }
       }
     }
 
-    function tick() {
-      if (!paused) {
-        x -= SPEED;
-        if (x <= -setW) x += setW; // seamless reset — exact pixel boundary
-        track.style.transform = 'translateX(' + x + 'px)';
+    function tick(ts) {
+      if (!paused && lastTs !== null && setW > 0) {
+        const dt = Math.min(ts - lastTs, 64); // cap delta to avoid tab-switch jumps
+        x -= SPEED_PX_S * dt / 1000;
+        if (x <= -setW) x += setW;            // seamless reset at exact boundary
+        track.style.transform = 'translate3d(' + x + 'px,0,0)';
       }
-      rafId = requestAnimationFrame(tick);
+      lastTs = ts;
+      requestAnimationFrame(tick);
     }
 
-    // Wait for all images to be loaded before measuring
-    const imgs = [...track.querySelectorAll('img')];
+    const imgs  = [...track.querySelectorAll('img')];
     const loads = imgs.map(img =>
       img.complete
         ? Promise.resolve()
@@ -1609,19 +1610,17 @@ a { color: inherit; }
 
     Promise.all(loads).then(() => {
       measure();
-      tick();
+      requestAnimationFrame(tick);
     });
 
-    // Re-measure on resize (debounced)
     let resizeTimer;
     window.addEventListener('resize', () => {
       clearTimeout(resizeTimer);
-      resizeTimer = setTimeout(() => { x = 0; measure(); }, 150);
+      resizeTimer = setTimeout(() => { measure(); lastTs = null; }, 150);
     }, { passive: true });
 
-    // Pause on hover
     track.parentElement.addEventListener('mouseenter', () => { paused = true; });
-    track.parentElement.addEventListener('mouseleave', () => { paused = false; });
+    track.parentElement.addEventListener('mouseleave', () => { paused = false; lastTs = null; });
   }());
 
   /* ---------------- SERVICES: scroll stack ----------------
