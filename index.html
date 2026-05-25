@@ -652,22 +652,6 @@ a { color: inherit; }
   overflow: hidden;
 }
 
-/* Background texture lines */
-.cta-final::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background-image:
-    repeating-linear-gradient(
-      90deg,
-      rgba(10,10,10,0.025) 0px,
-      rgba(10,10,10,0.025) 1px,
-      transparent 1px,
-      transparent 80px
-    );
-  pointer-events: none;
-  z-index: 0;
-}
 
 .cta-final__inner {
   max-width: 1120px;
