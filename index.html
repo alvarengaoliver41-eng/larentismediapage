@@ -1211,7 +1211,7 @@ a { color: inherit; }
 
           <div class="cta-field">
             <label for="f-pais">País*</label>
-            <input id="f-pais" name="País" type="text" placeholder="Ej: Paraguay" autocomplete="country-name" required />
+            <input id="f-pais" name="Pais" type="text" placeholder="Ej: Paraguay" autocomplete="country-name" required />
           </div>
           <div class="cta-field">
             <label for="f-ciudad">Ciudad*</label>
@@ -1794,30 +1794,16 @@ a { color: inherit; }
       setLoading(true);
 
       const fd = new FormData(form);
-
-      /* Use URLSearchParams — more reliable with FormSubmit than JSON */
-      const params = new URLSearchParams();
-      params.append('Nombre',      fd.get('Nombre'));
-      params.append('Email',       fd.get('Email'));
-      params.append('Empresa',     fd.get('Empresa'));
-      params.append('Cargo',       fd.get('Cargo'));
-      params.append('Pais',        fd.get('País'));
-      params.append('Ciudad',      fd.get('Ciudad'));
-      params.append('WhatsApp',    fd.get('WhatsApp'));
-      params.append('Necesidades', fd.get('Necesidades'));
-      params.append('_subject',    'Nuevo contacto desde Larentis Media');
-      params.append('_template',   'table');
-      params.append('_captcha',    'false');
-      params.append('_replyto',    fd.get('Email'));
+      fd.append('_subject',  'Nuevo contacto desde Larentis Media');
+      fd.append('_template', 'table');
+      fd.append('_captcha',  'false');
+      fd.append('_replyto',  fd.get('Email'));
 
       try {
         const res = await fetch(ENDPOINT, {
           method:  'POST',
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'Accept':       'application/json'
-          },
-          body: params.toString()
+          headers: { 'Accept': 'application/json' },
+          body: fd
         });
 
         let json = {};
