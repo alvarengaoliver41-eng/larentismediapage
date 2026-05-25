@@ -1794,54 +1794,69 @@ a { color: inherit; }
       setLoading(true);
 
       const fd = new FormData(form);
-      const payload = {
-        Nombre:      fd.get('Nombre'),
-        Email:       fd.get('Email'),
-        Empresa:     fd.get('Empresa'),
-        Cargo:       fd.get('Cargo'),
-        'País':      fd.get('País'),
-        Ciudad:      fd.get('Ciudad'),
-        WhatsApp:    fd.get('WhatsApp'),
-        Necesidades: fd.get('Necesidades'),
-        _subject:    'Nuevo contacto desde Larentis Media',
-        _template:   'table',
-        _captcha:    'false',
-        _replyto:    fd.get('Email'),
-        _cc:         fd.get('Email')
-      };
+
+      /* Use URLSearchParams — more reliable with FormSubmit than JSON */
+      const params = new URLSearchParams();
+      params.append('Nombre',      fd.get('Nombre'));
+      params.append('Email',       fd.get('Email'));
+      params.append('Empresa',     fd.get('Empresa'));
+      params.append('Cargo',       fd.get('Cargo'));
+      params.append('Pais',        fd.get('País'));
+      params.append('Ciudad',      fd.get('Ciudad'));
+      params.append('WhatsApp',    fd.get('WhatsApp'));
+      params.append('Necesidades', fd.get('Necesidades'));
+      params.append('_subject',    'Nuevo contacto desde Larentis Media');
+      params.append('_template',   'table');
+      params.append('_captcha',    'false');
+      params.append('_replyto',    fd.get('Email'));
 
       try {
         const res = await fetch(ENDPOINT, {
           method:  'POST',
-          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-          body:    JSON.stringify(payload)
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Accept':       'application/json'
+          },
+          body: params.toString()
         });
 
-        const json = await res.json().catch(() => ({}));
+        let json = {};
+        try { json = await res.json(); } catch (_) {}
 
-        if (res.ok && (json.success === 'true' || json.success === true)) {
+        /* FormSubmit returns success:"true" (string) on AJAX mode */
+        if (json.success === 'true' || json.success === true) {
           setLoading(false);
           btn.classList.add('is-success');
           const label = btn.querySelector('.cta-btn-label');
           if (label) label.textContent = '¡Enviado!';
           form.reset();
-          showFeedback('success', '¡Mensaje enviado! Te llegará una confirmación a tu correo y nos pondremos en contacto pronto.');
+          showFeedback('success', '¡Mensaje enviado! Nos pondremos en contacto pronto.');
+
+        } else if (json.message && json.message.toLowerCase().includes('verif')) {
+          /* First-time use: FormSubmit sent a verification email to the admin */
+          setLoading(false);
+          showFeedback('error', 'Activación pendiente: revisá alexlarentis3@gmail.com, FormSubmit envió un link de verificación. Una vez confirmado el formulario funcionará con normalidad.');
+          setTimeout(() => { btn.disabled = false; hideFeedback(); }, 8000);
+
         } else {
-          throw new Error('server');
+          throw new Error(json.message || 'error');
         }
 
-      } catch (_) {
+      } catch (err) {
         setLoading(false);
         btn.classList.add('is-error');
-        showFeedback('error', 'No se pudo enviar. Revisá tu conexión y volvé a intentarlo.');
-        /* Re-enable after 4s so user can retry */
+        /* If it's a network/CORS error, give a specific hint */
+        const msg = err instanceof TypeError
+          ? 'Error de red. Si el problema persiste escribinos directamente a alexlarentis3@gmail.com'
+          : 'No se pudo enviar. Volvé a intentarlo en unos segundos.';
+        showFeedback('error', msg);
         setTimeout(() => {
           btn.disabled = false;
           btn.classList.remove('is-error');
           const label = btn.querySelector('.cta-btn-label');
           if (label) label.textContent = 'Enviar';
           hideFeedback();
-        }, 4000);
+        }, 5000);
       }
     });
   }());
