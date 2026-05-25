@@ -802,9 +802,53 @@ a { color: inherit; }
   letter-spacing: -0.01em;
   text-transform: uppercase;
   color: var(--ink-3);
-  transition: color var(--dur-3) var(--ease-out), gap var(--dur-3) var(--ease-out);
+  transition: color var(--dur-3) var(--ease-out), gap var(--dur-3) var(--ease-out), opacity var(--dur-3) var(--ease-out);
 }
-.cta-submit:hover { color: var(--ink); gap: 22px; }
+.cta-submit:not(:disabled):hover { color: var(--ink); gap: 22px; }
+.cta-submit:disabled { cursor: not-allowed; opacity: 0.45; }
+.cta-submit.is-success { color: #1a7a4a; cursor: default; }
+.cta-submit.is-error   { color: #c0392b; cursor: default; }
+
+/* Spinner for loading state */
+@keyframes spin { to { transform: rotate(360deg); } }
+.cta-spinner {
+  display: none;
+  width: clamp(22px, 2.8vw, 40px);
+  height: clamp(22px, 2.8vw, 40px);
+  border: 2.5px solid rgba(10,10,10,0.15);
+  border-top-color: var(--ink-3);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  flex-shrink: 0;
+}
+.cta-submit.is-loading .cta-arrow   { display: none; }
+.cta-submit.is-loading .cta-spinner { display: block; }
+.cta-submit.is-loading .cta-btn-text::after { content: "Enviando…"; }
+.cta-submit.is-loading .cta-btn-label { display: none; }
+
+/* Inline feedback message */
+.form-feedback {
+  grid-column: 1 / -1;
+  display: none;
+  padding: 16px 20px;
+  border-radius: 10px;
+  font-size: 15px;
+  font-weight: var(--w-medium);
+  letter-spacing: -0.01em;
+  margin-top: var(--s-4);
+}
+.form-feedback.is-success {
+  display: block;
+  background: rgba(26,122,74,0.08);
+  color: #1a7a4a;
+  border: 1px solid rgba(26,122,74,0.2);
+}
+.form-feedback.is-error {
+  display: block;
+  background: rgba(192,57,43,0.07);
+  color: #c0392b;
+  border: 1px solid rgba(192,57,43,0.18);
+}
 
 .cta-arrow {
   width: clamp(28px, 3.5vw, 48px);
@@ -814,7 +858,7 @@ a { color: inherit; }
   flex-shrink: 0;
   transition: transform var(--dur-3) var(--ease-out);
 }
-.cta-submit:hover .cta-arrow { transform: translate(4px, -4px); }
+.cta-submit:not(:disabled):hover .cta-arrow { transform: translate(4px, -4px); }
 
 .cta-figure {
   position: absolute;
@@ -1143,12 +1187,9 @@ a { color: inherit; }
       <div class="cta-form-block">
         <canvas class="mesh cta-mesh" id="ctaMeshCanvas" aria-hidden="true"></canvas>
 
-        <form class="cta-form-grid" action="https://formsubmit.co/alexlarentis3@gmail.com" method="POST">
-          <!-- FormSubmit config -->
-          <input type="hidden" name="_subject" value="Nuevo contacto desde Larentis Media" />
-          <input type="hidden" name="_captcha" value="false" />
-          <input type="hidden" name="_template" value="table" />
-          <input type="text" name="_honey" style="display:none" />
+        <form class="cta-form-grid" id="contactForm" novalidate>
+          <!-- honeypot anti-spam -->
+          <input type="text" name="_honey" style="display:none" tabindex="-1" autocomplete="off" />
 
           <div class="cta-field">
             <label for="f-nombre">Nombre*</label>
@@ -1187,13 +1228,17 @@ a { color: inherit; }
           </div>
 
           <div class="cta-form-footer">
-            <button type="submit" class="cta-submit">
-              Enviar
+            <button type="submit" class="cta-submit" id="formSubmitBtn">
+              <span class="cta-btn-label">Enviar</span>
+              <span class="cta-btn-text" aria-live="polite"></span>
+              <div class="cta-spinner" aria-hidden="true"></div>
               <svg class="cta-arrow" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                 <path d="M6 26L26 6M14 6h12v12"/>
               </svg>
             </button>
           </div>
+
+          <div class="form-feedback" id="formFeedback" role="status" aria-live="polite"></div>
 
         </form>
       </div>
@@ -1695,6 +1740,112 @@ a { color: inherit; }
   } else {
     document.querySelectorAll('.reveal').forEach(el => el.classList.add('is-in'));
   }
+
+  /* ---------------- CONTACT FORM — AJAX via FormSubmit ---------------- */
+  (function initContactForm() {
+    const form     = document.getElementById('contactForm');
+    const btn      = document.getElementById('formSubmitBtn');
+    const feedback = document.getElementById('formFeedback');
+    if (!form || !btn || !feedback) return;
+
+    const ENDPOINT = 'https://formsubmit.co/ajax/alexlarentis3@gmail.com';
+
+    function setLoading(on) {
+      btn.disabled = on;
+      btn.classList.toggle('is-loading', on);
+    }
+
+    function showFeedback(type, msg) {
+      feedback.className = 'form-feedback is-' + type;
+      feedback.textContent = msg;
+    }
+
+    function hideFeedback() {
+      feedback.className = 'form-feedback';
+      feedback.textContent = '';
+    }
+
+    /* Client-side validation with native constraint API */
+    function validateForm() {
+      const fields = form.querySelectorAll('[required]');
+      for (const field of fields) {
+        if (!field.validity.valid) {
+          field.focus();
+          const label = form.querySelector('label[for="' + field.id + '"]');
+          const name  = label ? label.textContent.replace('*','').trim() : 'Campo';
+          showFeedback('error', name + ' es obligatorio o tiene un formato incorrecto.');
+          return false;
+        }
+      }
+      return true;
+    }
+
+    form.addEventListener('submit', async function(e) {
+      e.preventDefault();
+      hideFeedback();
+      btn.classList.remove('is-success', 'is-error');
+
+      if (!validateForm()) return;
+
+      /* Anti-spam: honeypot */
+      const honey = form.querySelector('[name="_honey"]');
+      if (honey && honey.value) return;
+
+      setLoading(true);
+
+      const fd = new FormData(form);
+      const payload = {
+        Nombre:      fd.get('Nombre'),
+        Email:       fd.get('Email'),
+        Empresa:     fd.get('Empresa'),
+        Cargo:       fd.get('Cargo'),
+        'País':      fd.get('País'),
+        Ciudad:      fd.get('Ciudad'),
+        WhatsApp:    fd.get('WhatsApp'),
+        Necesidades: fd.get('Necesidades'),
+        _subject:    'Nuevo contacto desde Larentis Media',
+        _template:   'table',
+        _captcha:    'false',
+        _replyto:    fd.get('Email'),
+        _cc:         fd.get('Email')
+      };
+
+      try {
+        const res = await fetch(ENDPOINT, {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          body:    JSON.stringify(payload)
+        });
+
+        const json = await res.json().catch(() => ({}));
+
+        if (res.ok && (json.success === 'true' || json.success === true)) {
+          setLoading(false);
+          btn.classList.add('is-success');
+          const label = btn.querySelector('.cta-btn-label');
+          if (label) label.textContent = '¡Enviado!';
+          form.reset();
+          showFeedback('success', '¡Mensaje enviado! Te llegará una confirmación a tu correo y nos pondremos en contacto pronto.');
+        } else {
+          throw new Error('server');
+        }
+
+      } catch (_) {
+        setLoading(false);
+        btn.classList.add('is-error');
+        showFeedback('error', 'No se pudo enviar. Revisá tu conexión y volvé a intentarlo.');
+        /* Re-enable after 4s so user can retry */
+        setTimeout(() => {
+          btn.disabled = false;
+          btn.classList.remove('is-error');
+          const label = btn.querySelector('.cta-btn-label');
+          if (label) label.textContent = 'Enviar';
+          hideFeedback();
+        }, 4000);
+      }
+    });
+  }());
+
 })();
 </script>
 </body>
